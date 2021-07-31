@@ -1,5 +1,13 @@
 # 修改的文件
 
+## 特别提醒
+
+这是我实验的代码，不适合生产环境。而且etcd 3.5加入了这个思想，直接用
+```
+./etcd --unsafe-no-fsync
+```
+即可。详细可参考：[三机集群测试报告](Three-nodes-benchmark.md)
+
 ## backend.go
 
 server/mvcc/backend/backend.go
@@ -55,3 +63,7 @@ func fdatasync(db *DB) error {
 然后，用etcdctl做一下put的测试，证明无误后（单机集群下，不会出现上面的Println信息），最好马上像上面comment这个Println
 
 注意：这是go package的工作目录，所以是临时的，而且是只读的，修改后需要overwrite，但不需要针对这个package进行go get or go install
+
+## 这个修改源码的性能嫩测试报告
+
+[可以参考这里](Three-nodes-by-modi-source-code.md)

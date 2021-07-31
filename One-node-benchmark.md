@@ -4,7 +4,9 @@
 
 受条件所限，我只能测试cluster为一台机器，所以使用 --target-leader。我们只测试写put
 
-这个仅供参考，因为实际盛传环境中，我们不会只配集群为一台机器
+同时，这个测试是在MacOS上测试，后来我发现Linux的表现和MacOS表现差别很大。详细参考[三机集群测试](Three-nodes-benchmark.md)。
+
+这个仅供参考，因为实际盛传环境中，我们不会只配集群为一台机器，也不会跑在MacOS上。
 
 ```
 ./benchmark --target-leader --conns=100 --clients=1000 put --key-size=100 --val-size=1000 --total=100000

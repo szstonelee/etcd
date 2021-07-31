@@ -8,6 +8,7 @@
 
 NOTE: 你需要根基你的配置，修改对应的IP地址和--data-dir=<你etcd数据库目录>
 
+首先在是三台机器上都执行下面的命令
 ```
 TOKEN=token-01
 CLUSTER_STATE=new
@@ -28,7 +29,7 @@ THIS_IP=${HOST_1}
 --initial-advertise-peer-urls http://${THIS_IP}:2380 --listen-peer-urls http://${THIS_IP}:2380 \
 --advertise-client-urls http://${THIS_IP}:2379 --listen-client-urls http://${THIS_IP}:2379 \
 --initial-cluster ${CLUSTER} \
---initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN}
+--initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN} --unsafe-no-fsync
 ```
 
 For machine 2:
@@ -39,7 +40,7 @@ THIS_IP=${HOST_2}
 --initial-advertise-peer-urls http://${THIS_IP}:2380 --listen-peer-urls http://${THIS_IP}:2380 \
 --advertise-client-urls http://${THIS_IP}:2379 --listen-client-urls http://${THIS_IP}:2379 \
 --initial-cluster ${CLUSTER} \
---initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN}
+--initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN} --unsafe-no-fsync
 ```
 
 For machine 3:
@@ -50,7 +51,7 @@ THIS_IP=${HOST_3}
 --initial-advertise-peer-urls http://${THIS_IP}:2380 --listen-peer-urls http://${THIS_IP}:2380 \
 --advertise-client-urls http://${THIS_IP}:2379 --listen-client-urls http://${THIS_IP}:2379 \
 --initial-cluster ${CLUSTER} \
---initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN}
+--initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN} --unsafe-no-fsync
 ```
 
 ## 检查集群状态工具
