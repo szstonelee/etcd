@@ -1,132 +1,47 @@
-# 修改的文件
 
-## backend.go
+# 一个优化etcd（Raft）的方法
 
-server/mvcc/backend/backend.go
+## 前言
 
-newBackend()
+我很早有一个想法，就是能不能etcd不用fsync，这样就可以提升集群性能。
+
+我自己尝试修改etcd代码，可以参考我之前的尝试：[修改etcd代码](threee-lines-cod.md)，然后测试证明是可行的（但不保证稳定，因为毕竟修改了源码）。
+
+最近发现，在最新版本etcd 3.5里，官方已经加入了类似的特性，所以建议大家使用官方的解决方案。
+
+但思想一致，都是绕开磁盘的fsync，从而带来集群性能的提升。
+
+即启动etcd时，带入下面的参数
 ```
-bopts.NoSync = true
-```
-
-## wal.go
-
-server/wal/wal.go
-
-Create()
-```
-	w := &WAL{
-		lg:           lg,
-		dir:          dirpath,
-		metadata:     metadata,
-		unsafeNoSync: true,
-	}
+./etcd --unsafe-no-fsync
 ```
 
-openAtIndex()
-```
-	w := &WAL{
-		lg:           lg,
-		dir:          dirpath,
-		start:        snap,
-		decoder:      newDecoder(rs...),
-		readClose:    closer,
-		locks:        ls,
-		unsafeNoSync: true,
-	}
-```
+## 事情没有这么简单
 
-## debug for Sync messages
+但我们要知道上面的做法是有风险的。
 
-If you want to know boltDB sync or no sync, in $GOPATH (default is ~/go)
-在这个目录下，pkg/mod/go.etcd.io/bbolt@v1.3.5/boltsync_unix.go (仅测试了Mac, Linux or windows可能是其他文件)
+当你不用fsync时，也就意味着如果某个etcd node崩溃了，你不能立即用旧数据启动这个node，因为这时磁盘上的数据可能是坏的。
 
-可以修改下面的代码
-```
-func fdatasync(db *DB) error {
-        // fmt.Println("in bolt, call fdatasync...")
-        return db.file.Sync()
-}
-```
+所以，我们必须删除crash node上的旧数据，然后从集群删除这个node，然后可以用同一个IP再次以全新的node加入集群。
 
-然后，用etcdctl做一下put的测试，证明无误后，最好马上像上面comment这个Println
+这样就解决了这个问题。
 
-注意：这是go package的工作目录，所以是临时的，而且是只读的，修改后需要overwrite，但不需要针对这个package进行go get or go install
+具体操作方法可以参考：[用同一机器替换一个损坏的集群节点](replace-on-same-machine.md)
 
-## 未来需要增加的工作
+但这是一个trade off。因为如果etcd集群数据有一定量，比如几十个G，这不是很快能完成的工作，同步数据以及写盘几十个G需要时间。
 
-需要修改main()，让crash不允许启动
+还有一个更好的方案，就是在整个集群旁边放一个etcd learner，当发现crash member node时，先从集群里删除旧的机器，然后提升（promote）这个learner成为新的集群节点，这样就大大缩减了故障恢复时间，trade off是你需要多增加一台机器做learner。这个方案可以结合我上面的文档再参考官方文档去做，并不复杂。
 
-# 测试结果
+## 测试结果
 
-## 测试工具
+可以参考[三机器etcd集群优化测试报告](Three-nodes-benchmark.md)
 
-用 tools/benchmark/main.go
+对于各个测试你用例，普遍有30%的性能（Throughput）的提升。
 
-```
-go build main.go
-mv main benchmark
-```
+还有一个很有趣的现象：如果这个优化放在MacOS上跑，性能可以最高提升50倍。具体可以参考[单机MacOS测试报告](One-node-benchmark.md)
 
-受条件所限，我只能测试cluster为一台机器，所以使用 --target-leader。我们只测试写put
+## 总结
 
-```
-./benchmark --target-leader --conns=100 --clients=1000 put --key-size=100 --val-size=1000 --total=100000
-```
+假设你的etcd集群很稳定，比如一年有一个node会损坏。你可以冒一点风险，用这个优化带来一年的任何时刻的30%性能提升，同时承担一个小风险：万一node坏了，花点时间（应该是分钟级，我猜的，如果对于大的数据集而言，具体请自行测试）用上面的工具来恢复整个集群。
 
-ps: build server and remove db folder
-```
-rm -rf default.etcd |
-rm -rf bin |
-./build 
-./bin/etcd
-```
-
-## put测试结果
-
-注意：每次测试清理一下db folder ```rm -rf default.etcd```
-
-### 常规 --key-size=100 --val-size=1000 --total=100000
-
-| 版本 | conns | clients | qps | 99% latency (second) |
-| -- | -- | -- | -- | -- |
-| 原始 | 1 | 1 | 104.8754 | 0.0443 |
-| 优化 | 1 | 1 | 5163.9124 | 0.0004 |
-| 原始 | 1 | 10 | 1227.5198 | 0.0382 |
-| 优化 | 1 | 10 | 20559.3612 | 0.0011 |
-| 原始 | 10 | 100 | 9784.9715 | 0.0640 |
-| 优化 | 10 | 100 | 26188.6270 | 0.0128 |
-| 原始 | 100 | 1000 | 21718.9972 | 0.2080 |
-| 优化 | 100 | 1000 | 27781.4646 | 0.2545 |
-
-### 小key/value，--key-size=10 --val-size=100 --total=100000
-
-| 版本 | conns | clients | qps | 99% latency (second) |
-| -- | -- | -- | -- | -- |
-| 原始 | 1 | 1 | 108.8595 | 0.0362 |
-| 优化 | 1 | 1 | 5249.5042 | 0.0004 |
-| 原始 | 1 | 10 | 1268.1578 | 0.0363 |
-| 优化 | 1 | 10 | 25682.0791 | 0.0010 |
-| 原始 | 10 | 100 | 11913.3493 | 0.0432 |
-| 优化 | 10 | 100 | 39435.8558 | 0.0060 |
-| 原始 | 100 | 1000 | 26613.6242 | 0.0984 |
-| 优化 | 100 | 1000 | 39885.2402 | 0.0841 |
-
-### 大key/value, --key-size=1000 --val-size=1000000 --total=1000
-
-| 版本 | conns | clients | qps | 99% latency (second) |
-| -- | -- | -- | -- | -- |
-| 原始 | 1 | 1 | 43.4933 | 0.2034 |
-| 优化 | 1 | 1 | 173.4599 | 0.1463 |
-| 原始 | 1 | 10 | 62.0685 | 0.6409 |
-| 优化 | 1 | 10 | 214.0351 | 0.2079 |
-| 原始 | 10 | 100 | 109.3217 | 1.3296 |
-| 优化 | 10 | 100 | 172.0942 | 1.6161 |
-
-# 分析
-
-1. 单个版本比较，可以看出，当conns和clients都很少的时候，qps比较低，对于原始，如果clients十倍的增长到100，那么qps也几乎是10倍的增长。优化版本也类似，只是增长倍数没有这么离谱。而且，对于原始版本，不管key/value多大，如果conns=1 and clients=1，则qps都差不多，都是100这个级别（优化版本也有类似现象）。怀疑是：服务器端在做等待，收集一定量的请求(或一定时间内)，再做batch操作。
-
-2. 原始和优化版本比较，在clients比较小时，差别最大，对于key/value=1K，以及key/value=100时，都达到了50倍。同时，99% latency只有百分之一。这是磁盘优化的最好结果。但当clients增高时，由于服务器端使用了batch的优化，这个磁盘读写优化的效果就没有那么大了，qps最低只能提高30%，99% latency也开始接近。
-
-3. 当key/value的大小是1M，可以看出在clients=100时，其qps达到109，因为写盘是data + Raft WAL，所以其磁盘写入的带宽是200多兆，基本上是我的Mac的上限了。这时再看优化版本，由于节省了Raft WAL，所以qps还是带来了50%以上的提高。
+注意：即使etcd一个节点坏了，对于三节点的集群而言，仍可以正常工作，所以一定时间的恢复在很多工作场景下是值得的。
