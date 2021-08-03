@@ -141,4 +141,4 @@ du -h -d 0 /root/br_rocksdb/data.etcd
 
 ## 附加说明
 
-我之前是修改源码尝试做类似的事情，请参考[修改etcd圆满](three-lines-code.md)。然后也有对应的[一个测试报告](Three-nodes-by-modi-source-code.md)，测试结果差不多，但我修改的源码很可能是不安全的，所以建议还是用--unsafe-no-fsync这个参数。
+我之前是修改源码尝试做类似的事情，请参考[修改etcd源码](three-lines-code.md)。然后也有对应的[一个测试报告](Three-nodes-by-modi-source-code.md)，测试结果差不多，但我修改的源码很可能是不安全的，所以建议还是用--unsafe-no-fsync这个参数。
