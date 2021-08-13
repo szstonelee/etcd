@@ -38,7 +38,7 @@ mv main benchmark
 
 整个etcd 3.5的编译如下：
 ```
-git clone -b releasse-3.5 https://github.com/etcd-io/etcd.git
+git clone -b release-3.5 https://github.com/etcd-io/etcd.git
 cd etcd
 ./build.sh
 cd bin
